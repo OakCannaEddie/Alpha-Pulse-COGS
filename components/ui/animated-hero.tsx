@@ -1,12 +1,19 @@
 import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { MoveRight, PhoneCall } from 'lucide-react'
+import { MoveRight } from 'lucide-react'
+// import { PhoneCall } from 'lucide-react' // Reserved for future contact button
 import { Button } from '@/components/ui/button'
 import Image from 'next/image'
+import { useRouter } from 'next/navigation'
 
 function Hero() {
   const [titleNumber, setTitleNumber] = useState(0)
   const titles = useMemo(() => ['Modern', 'Full-stack', 'Secure', 'Scalable', 'Powerful'], [])
+  const router = useRouter()
+
+  const handleGetStarted = () => {
+    router.push('/sign-in')
+  }
 
   useEffect(() => {
     const timeoutId = setTimeout(() => {
@@ -70,7 +77,7 @@ function Hero() {
             </p>
           </div>
           <div className="flex flex-row gap-3">
-            <Button size="lg" className="gap-4">
+            <Button size="lg" className="gap-4" onClick={handleGetStarted}>
               Get Started <MoveRight className="h-4 w-4" />
             </Button>
           </div>

@@ -194,17 +194,157 @@ export type Database = {
                     },
                 ]
             }
+            organizations: {
+                Row: {
+                    id: string
+                    name: string
+                    slug: string
+                    status: Database["public"]["Enums"]["organization_status"]
+                    settings: Json
+                    subscription_id: string | null
+                    trial_ends_at: string | null
+                    created_at: string
+                    updated_at: string
+                }
+                Insert: {
+                    id?: string
+                    name: string
+                    slug: string
+                    status?: Database["public"]["Enums"]["organization_status"]
+                    settings?: Json
+                    subscription_id?: string | null
+                    trial_ends_at?: string | null
+                    created_at?: string
+                    updated_at?: string
+                }
+                Update: {
+                    id?: string
+                    name?: string
+                    slug?: string
+                    status?: Database["public"]["Enums"]["organization_status"]
+                    settings?: Json
+                    subscription_id?: string | null
+                    trial_ends_at?: string | null
+                    created_at?: string
+                    updated_at?: string
+                }
+                Relationships: []
+            }
+            user_profiles: {
+                Row: {
+                    id: string
+                    email: string
+                    first_name: string | null
+                    last_name: string | null
+                    active_organization_id: string | null
+                    preferences: Json
+                    created_at: string
+                    updated_at: string
+                }
+                Insert: {
+                    id: string
+                    email: string
+                    first_name?: string | null
+                    last_name?: string | null
+                    active_organization_id?: string | null
+                    preferences?: Json
+                    created_at?: string
+                    updated_at?: string
+                }
+                Update: {
+                    id?: string
+                    email?: string
+                    first_name?: string | null
+                    last_name?: string | null
+                    active_organization_id?: string | null
+                    preferences?: Json
+                    created_at?: string
+                    updated_at?: string
+                }
+                Relationships: [
+                    {
+                        foreignKeyName: "user_profiles_active_organization_id_fkey"
+                        columns: ["active_organization_id"]
+                        isOneToOne: false
+                        referencedRelation: "organizations"
+                        referencedColumns: ["id"]
+                    }
+                ]
+            }
+            organization_users: {
+                Row: {
+                    id: string
+                    organization_id: string
+                    user_id: string
+                    role: Database["public"]["Enums"]["user_role"]
+                    invited_by: string | null
+                    invited_at: string
+                    joined_at: string | null
+                    last_active_at: string | null
+                    is_active: boolean
+                }
+                Insert: {
+                    id?: string
+                    organization_id: string
+                    user_id: string
+                    role?: Database["public"]["Enums"]["user_role"]
+                    invited_by?: string | null
+                    invited_at?: string
+                    joined_at?: string | null
+                    last_active_at?: string | null
+                    is_active?: boolean
+                }
+                Update: {
+                    id?: string
+                    organization_id?: string
+                    user_id?: string
+                    role?: Database["public"]["Enums"]["user_role"]
+                    invited_by?: string | null
+                    invited_at?: string
+                    joined_at?: string | null
+                    last_active_at?: string | null
+                    is_active?: boolean
+                }
+                Relationships: [
+                    {
+                        foreignKeyName: "organization_users_organization_id_fkey"
+                        columns: ["organization_id"]
+                        isOneToOne: false
+                        referencedRelation: "organizations"
+                        referencedColumns: ["id"]
+                    },
+                    {
+                        foreignKeyName: "organization_users_user_id_fkey"
+                        columns: ["user_id"]
+                        isOneToOne: false
+                        referencedRelation: "user_profiles"
+                        referencedColumns: ["id"]
+                    },
+                    {
+                        foreignKeyName: "organization_users_invited_by_fkey"
+                        columns: ["invited_by"]
+                        isOneToOne: false
+                        referencedRelation: "user_profiles"
+                        referencedColumns: ["id"]
+                    }
+                ]
+            }
         }
         Views: {
             [_ in never]: never
         }
         Functions: {
+            get_user_active_organization: {
+                Args: Record<PropertyKey, never>
+                Returns: string | null
+            }
             requesting_user_id: {
                 Args: Record<PropertyKey, never>
                 Returns: string
             }
         }
         Enums: {
+            organization_status: "active" | "inactive" | "trial"
             pricing_plan_interval: "day" | "week" | "month" | "year"
             pricing_type: "one_time" | "recurring"
             subscription_status:
@@ -216,6 +356,7 @@ export type Database = {
             | "past_due"
             | "unpaid"
             | "paused"
+            user_role: "admin" | "manager" | "operator"
         }
         CompositeTypes: {
             [_ in never]: never
