@@ -21,8 +21,11 @@ const isPublicRoute = createRouteMatcher([
   '/api/webhooks(.*)'
 ])
 
+// Routes that don't require organization (onboarding page)
+const isOnboardingRoute = createRouteMatcher(['/onboarding(.*)'])
+
 export default clerkMiddleware(async (auth, req) => {
-  const { userId } = await auth()
+  const { userId, sessionClaims } = await auth()
   const { pathname } = req.nextUrl
 
   // If user is trying to access a protected route
@@ -34,11 +37,31 @@ export default clerkMiddleware(async (auth, req) => {
     if (!userId) {
       return NextResponse.redirect(new URL('/sign-in', req.url))
     }
+
+    // Check if user has an active organization (except for onboarding route)
+    if (!isOnboardingRoute(req)) {
+      const publicMetadata = sessionClaims?.publicMetadata as { activeOrgId?: string } | undefined
+      const activeOrgId = publicMetadata?.activeOrgId
+      
+      // If no active organization, redirect to onboarding
+      if (!activeOrgId) {
+        return NextResponse.redirect(new URL('/onboarding', req.url))
+      }
+    }
   }
 
   // If user is authenticated and on root or auth pages, redirect to dashboard
   if (userId && (pathname === '/' || pathname === '/sign-in' || pathname === '/sign-up')) {
-    return NextResponse.redirect(new URL('/dashboard', req.url))
+    // Check if user has active organization
+    const publicMetadata = sessionClaims?.publicMetadata as { activeOrgId?: string } | undefined
+    const activeOrgId = publicMetadata?.activeOrgId
+    
+    if (activeOrgId) {
+      return NextResponse.redirect(new URL('/dashboard', req.url))
+    } else {
+      // No org, send to onboarding
+      return NextResponse.redirect(new URL('/onboarding', req.url))
+    }
   }
 
   return NextResponse.next()

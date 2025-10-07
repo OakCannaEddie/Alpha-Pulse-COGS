@@ -17,7 +17,9 @@
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react'
 import { useUser } from '@clerk/nextjs'
+import { useSupabase } from '@/utils/supabase/context'
 import { Database } from '@/types/database.types'
+import { createOrganizationService } from '@/services/organization.service'
 
 // Type definitions for organization data
 type Organization = Database['public']['Tables']['organizations']['Row']
@@ -79,6 +81,7 @@ interface OrganizationProviderProps {
 
 export function OrganizationProvider({ children }: OrganizationProviderProps) {
   const { user, isLoaded: userLoaded } = useUser()
+  const supabase = useSupabase()
   
   // State management
   const [activeOrganization, setActiveOrganization] = useState<Organization | null>(null)
@@ -89,8 +92,7 @@ export function OrganizationProvider({ children }: OrganizationProviderProps) {
   const [error, setError] = useState<Error | null>(null)
 
   /**
-   * Load user's organizations and active organization from API
-   * This will be replaced with actual Supabase calls once we have the service layer
+   * Load user's organizations from Supabase
    */
   const loadUserOrganizations = async () => {
     if (!user?.id) {
@@ -103,42 +105,48 @@ export function OrganizationProvider({ children }: OrganizationProviderProps) {
       setIsError(false)
       setError(null)
 
-      // TODO: Replace with actual API calls to Supabase
-      // For now, using mock data to establish the structure
+      const orgService = createOrganizationService(supabase)
       
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 500))
+      // Fetch all organizations user has access to
+      const organizations = await orgService.getUserOrganizations(user.id)
       
-      // Mock organization data - will be replaced with real API calls
-      const mockOrganizations: OrganizationMembership[] = [
-        {
-          organization: {
-            id: 'org-1',
-            name: 'Acme Manufacturing',
-            slug: 'acme-mfg',
-            status: 'active' as const,
-            settings: {},
-            subscription_id: null,
-            trial_ends_at: null,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          },
-          role: 'admin' as const,
-          joinedAt: new Date().toISOString(),
-          isActive: true
+      // Transform to membership format
+      const memberships: OrganizationMembership[] = organizations.map(org => ({
+        organization: {
+          id: org.id,
+          name: org.name,
+          slug: org.slug,
+          status: org.status,
+          settings: org.settings,
+          subscription_id: org.subscription_id,
+          trial_ends_at: org.trial_ends_at,
+          created_at: org.created_at,
+          updated_at: org.updated_at
+        },
+        role: org.role,
+        joinedAt: org.joinedAt,
+        isActive: true
+      }))
+      
+      setUserOrganizations(memberships)
+      
+      // Check for active organization from Clerk metadata
+      const activeOrgId = user.publicMetadata?.activeOrgId as string | undefined
+      
+      if (activeOrgId && memberships.length > 0) {
+        const activeMembership = memberships.find(m => m.organization.id === activeOrgId)
+        if (activeMembership) {
+          setActiveOrganization(activeMembership.organization)
+          setUserRole(activeMembership.role)
+        } else if (memberships.length > 0) {
+          // Fallback to first organization if metadata org not found
+          setActiveOrganization(memberships[0].organization)
+          setUserRole(memberships[0].role)
         }
-      ]
-      
-      setUserOrganizations(mockOrganizations)
-      
-      // Set the first organization as active if none is set
-      if (mockOrganizations.length > 0 && !activeOrganization) {
-        const firstOrg = mockOrganizations[0]
-        setActiveOrganization(firstOrg.organization)
-        setUserRole(firstOrg.role)
-        
-        // Store in localStorage for persistence
-        localStorage.setItem('activeOrganizationId', firstOrg.organization.id)
+      } else if (memberships.length > 0) {
+        // Set first organization as active if none is set
+        setActiveOrganization(memberships[0].organization)
+        setUserRole(memberships[0].role)
       }
       
     } catch (err) {
@@ -166,14 +174,32 @@ export function OrganizationProvider({ children }: OrganizationProviderProps) {
       throw new Error('Organization membership is inactive')
     }
     
-    setActiveOrganization(membership.organization)
-    setUserRole(membership.role)
-    
-    // Persist to localStorage
-    localStorage.setItem('activeOrganizationId', organizationId)
-    
-    // TODO: Update user profile in database with new active organization
-    // This will be implemented when we have the user profile service
+    try {
+      // Call API to update user's active organization
+      const response = await fetch('/api/organizations/switch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ organizationId })
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || 'Failed to switch organization')
+      }
+
+      // Update local state
+      setActiveOrganization(membership.organization)
+      setUserRole(membership.role)
+      
+      // Persist to localStorage
+      localStorage.setItem('activeOrganizationId', organizationId)
+      
+      // Reload the page to update all data with new org context
+      window.location.reload()
+    } catch (err) {
+      console.error('Failed to switch organization:', err)
+      throw err
+    }
   }
 
   /**
@@ -215,24 +241,6 @@ export function OrganizationProvider({ children }: OrganizationProviderProps) {
       setIsLoading(false)
     }
   }, [userLoaded, user])
-
-  /**
-   * Restore active organization from localStorage on mount
-   */
-  useEffect(() => {
-    if (userOrganizations.length > 0 && !activeOrganization) {
-      const savedOrgId = localStorage.getItem('activeOrganizationId')
-      if (savedOrgId) {
-        const savedMembership = userOrganizations.find(
-          m => m.organization.id === savedOrgId
-        )
-        if (savedMembership && savedMembership.isActive) {
-          setActiveOrganization(savedMembership.organization)
-          setUserRole(savedMembership.role)
-        }
-      }
-    }
-  }, [userOrganizations])
 
   const contextValue: OrganizationContextType = {
     activeOrganization,
